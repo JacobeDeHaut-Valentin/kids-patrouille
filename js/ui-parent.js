@@ -3,8 +3,15 @@ import {
   saveState,
   defaultState,
   migrate,
-  sha256
+  sha256,
+  activeChild,
+  hydrateLegacyFields,
+  addChild,
+  updateChild,
+  deleteChild,
+  setActiveChild
 } from './state.js';
+
 import { BESTIARY, EMOJI_CHOICES } from './data.js';
 import { escapeHtml, showScreen, vibrate } from './helpers.js';
 import { soundClick, soundError } from './audio.js';
@@ -15,6 +22,10 @@ import { openCustomScreen } from './ui-custom.js';
 
 let parentChallenge = null;
 let lockPressTimer = null;
+
+/* =========================================================
+   Sécurité zone parent
+   ========================================================= */
 
 export function getParentLockInfo() {
   const until = parseInt(sessionStorage.getItem('parentLockUntil') || '0', 10);
@@ -67,7 +78,7 @@ function showMathModal() {
   const challenge = parentChallenge;
 
   showModal({
-    title: '🔐 Zone Parent (1ère fois)',
+    title: '🔐 Zone Parent',
     message: `
       Calcule :<br>
       <b style="font-size:28px">
@@ -172,12 +183,16 @@ function showPasswordModal() {
   });
 }
 
+/* =========================================================
+   Ouverture / rendu parent
+   ========================================================= */
+
 export function openParentZone() {
   renderParent();
   showScreen('screen-parent');
 }
 
-function buildLast7DaysData() {
+function buildLast7DaysData(child) {
   const output = [];
   const today = new Date();
   const dayLabels = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
@@ -187,13 +202,12 @@ function buildLast7DaysData() {
     date.setDate(date.getDate() - i);
 
     const dateString = date.toDateString();
-
     let count = 0;
 
     if (i === 0) {
-      count = store.state.completedToday.length;
+      count = child.completedToday.length;
     } else {
-      const history = store.state.stats.history.filter(item => item.date === dateString);
+      const history = child.stats.history.filter(item => item.date === dateString);
       count = history.reduce((sum, item) => sum + (item.count || 0), 0);
     }
 
@@ -207,8 +221,8 @@ function buildLast7DaysData() {
   return output;
 }
 
-function renderMiniChart() {
-  const data = buildLast7DaysData();
+function renderMiniChart(child) {
+  const data = buildLast7DaysData(child);
   const max = Math.max(1, ...data.map(day => day.count));
 
   let html = '<div class="mini-chart">';
@@ -233,45 +247,110 @@ function renderMiniChart() {
   return html;
 }
 
-function computeLast7Days() {
-  return buildLast7DaysData().reduce((sum, day) => sum + day.count, 0);
+function computeLast7Days(child) {
+  return buildLast7DaysData(child).reduce((sum, day) => sum + day.count, 0);
 }
 
 export function renderParent() {
+  const child = activeChild();
+  if (!child) return;
+
   const container = document.getElementById('parent-content');
 
   const settings = store.state.settings;
-  const stats = store.state.stats;
   const nightMode = settings.nightMode;
   const hasPassword = !!settings.parentPassword;
-  const last7 = computeLast7Days();
+  const last7 = computeLast7Days(child);
 
   container.innerHTML = `
+    ${renderChildrenSection(child)}
+
     <div class="p-section">
-      <h3>👦 Identité</h3>
+      <h3>👦 Enfant actif</h3>
       <label>Prénom</label>
-      <input type="text" id="p-name" value="${escapeHtml(store.state.childName)}" maxlength="20">
+      <input type="text" id="p-name" value="${escapeHtml(child.name)}" maxlength="20">
+      <label>Emoji</label>
+      <input type="text" id="p-emoji" value="${escapeHtml(child.emoji || '🦸')}" maxlength="4">
       <div class="p-actions-center">
-        <button class="p-btn success" id="p-save-name">Enregistrer</button>
+        <button class="p-btn success" id="p-save-child">Enregistrer</button>
       </div>
     </div>
 
     <div class="p-section">
-      <h3>🔒 Sécurité</h3>
-      <div style="text-align:center;font-size:13px;color:#bdc3c7;margin-bottom:8px">
-        ${hasPassword ? '✅ Code défini' : '⚠️ Calcul mental uniquement'}
-      </div>
+      <h3>📋 Missions de ${escapeHtml(child.name || 'Champion')}</h3>
+      <div id="p-tasks-list"></div>
       <div class="p-actions-center">
-        <button class="p-btn" id="p-change-pwd">${hasPassword ? 'Changer' : 'Définir'} le code</button>
-        ${hasPassword ? '<button class="p-btn warn" id="p-remove-pwd">Supprimer le code</button>' : ''}
+        <button class="p-btn" id="p-add-task">➕ Nouvelle mission</button>
+        <button class="p-btn warn" id="p-reset-missions">♻️ Reset missions du jour</button>
+      </div>
+    </div>
+
+    ${renderRewardsSection(child)}
+
+    <div class="p-section">
+      <h3>🎁 Réglages récompenses</h3>
+      <label>Quota Journée Parfaite : <b id="p-quota-val">${child.settings.perfectQuota}%</b></label>
+      <input type="range" id="p-quota" min="50" max="100" step="5" value="${child.settings.perfectQuota}">
+
+      <label style="margin-top:10px">Probabilité monstre : <b id="p-drop-val">${child.settings.monsterDropRate}%</b></label>
+      <input type="range" id="p-drop" min="5" max="100" step="5" value="${child.settings.monsterDropRate}">
+
+      <div class="p-actions-center">
+        <button class="p-btn success" id="p-save-rewards-settings">Enregistrer</button>
       </div>
     </div>
 
     <div class="p-section">
-      <h3>🌙 Mode Nuit</h3>
+      <h3>👾 Monstres</h3>
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="v">${child.monsters.length}/${BESTIARY.length}</div>
+          <div class="l">Collection</div>
+        </div>
+        <div class="stat-box">
+          <div class="v">${Math.round((child.monsters.length / BESTIARY.length) * 100)}%</div>
+          <div class="l">Complétée</div>
+        </div>
+      </div>
+      <div class="p-actions-center" style="margin-top:10px">
+        <button class="p-btn warn" id="p-reset-collection">Reset collection</button>
+      </div>
+    </div>
+
+    <div class="p-section">
+      <h3>📊 Statistiques de ${escapeHtml(child.name || 'Champion')}</h3>
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="v">${child.stats.totalCompleted}</div>
+          <div class="l">Réussies totales</div>
+        </div>
+        <div class="stat-box">
+          <div class="v">${last7}</div>
+          <div class="l">7 derniers jours</div>
+        </div>
+        <div class="stat-box">
+          <div class="v">${child.stats.perfectDays}</div>
+          <div class="l">Journées parfaites</div>
+        </div>
+        <div class="stat-box">
+          <div class="v">${child.stats.failedAttempts || 0}</div>
+          <div class="l">Tentatives échouées</div>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-size:13px;color:#bdc3c7;text-align:center">
+        Points : ${child.points} ⭐
+      </div>
+      <div style="margin-top:10px;font-size:13px;color:#fdcb6e;text-align:center">
+        📈 7 derniers jours
+      </div>
+      ${renderMiniChart(child)}
+    </div>
+
+    <div class="p-section">
+      <h3>🌙 Préférences globales</h3>
       <div class="night-row">
         <input type="checkbox" id="p-nm-enabled" ${nightMode.enabled ? 'checked' : ''}>
-        <label for="p-nm-enabled" style="margin:0">Activé manuellement</label>
+        <label for="p-nm-enabled" style="margin:0">Mode nuit manuel</label>
       </div>
       <div class="night-row">
         <input type="checkbox" id="p-nm-auto" ${nightMode.autoSchedule ? 'checked' : ''}>
@@ -289,37 +368,14 @@ export function renderParent() {
     </div>
 
     <div class="p-section">
-      <h3>📋 Tâches</h3>
-      <div id="p-tasks-list"></div>
+      <h3>🔒 Sécurité</h3>
+      <div style="text-align:center;font-size:13px;color:#bdc3c7;margin-bottom:8px">
+        ${hasPassword ? '✅ Code parent défini' : '⚠️ Calcul mental uniquement'}
+      </div>
       <div class="p-actions-center">
-        <button class="p-btn" id="p-add-task">➕ Nouvelle tâche</button>
+        <button class="p-btn" id="p-change-pwd">${hasPassword ? 'Changer' : 'Définir'} le code</button>
+        ${hasPassword ? '<button class="p-btn warn" id="p-remove-pwd">Supprimer le code</button>' : ''}
       </div>
-    </div>
-
-    <div class="p-section">
-      <h3>🎁 Récompenses</h3>
-      <label>Quota Journée Parfaite : <b id="p-quota-val">${settings.perfectQuota}%</b></label>
-      <input type="range" id="p-quota" min="50" max="100" step="5" value="${settings.perfectQuota}">
-      <label style="margin-top:10px">Probabilité monstre : <b id="p-drop-val">${settings.monsterDropRate}%</b></label>
-      <input type="range" id="p-drop" min="5" max="100" step="5" value="${settings.monsterDropRate}">
-      <div class="p-actions-center">
-        <button class="p-btn success" id="p-save-rewards">Enregistrer</button>
-      </div>
-    </div>
-
-    <div class="p-section">
-      <h3>📊 Statistiques</h3>
-      <div class="stat-grid">
-        <div class="stat-box"><div class="v">${stats.totalCompleted}</div><div class="l">Réussies totales</div></div>
-        <div class="stat-box"><div class="v">${last7}</div><div class="l">7 derniers jours</div></div>
-        <div class="stat-box"><div class="v">${stats.perfectDays}</div><div class="l">Journées parfaites</div></div>
-        <div class="stat-box"><div class="v">${stats.failedAttempts || 0}</div><div class="l">Tentatives échouées</div></div>
-      </div>
-      <div style="margin-top:8px;font-size:13px;color:#bdc3c7;text-align:center">
-        Points : ${store.state.points} ⭐ — Monstres : ${store.state.monsters.length}/${BESTIARY.length}
-      </div>
-      <div style="margin-top:10px;font-size:13px;color:#fdcb6e;text-align:center">📈 7 derniers jours</div>
-      ${renderMiniChart()}
     </div>
 
     <div class="p-section">
@@ -331,11 +387,10 @@ export function renderParent() {
     </div>
 
     <div class="p-section">
-      <h3>♻️ Réinitialisation</h3>
+      <h3>♻️ Réinitialisation avancée</h3>
       <div class="p-actions-center">
-        <button class="p-btn warn" id="p-reset-day">Reset du jour</button>
-        <button class="p-btn warn" id="p-reset-collection">Reset collection</button>
-        <button class="p-btn danger" id="p-reset-all">⚠️ Reset complet</button>
+        <button class="p-btn warn" id="p-reset-child">Reset enfant actif</button>
+        <button class="p-btn danger" id="p-reset-all">⚠️ Reset application complète</button>
       </div>
     </div>
   `;
@@ -344,16 +399,77 @@ export function renderParent() {
   bindParentEvents();
 }
 
+/* =========================================================
+   Section enfants
+   ========================================================= */
+
+function renderChildrenSection(active) {
+  const children = store.state.children || [];
+
+  let html = `
+    <div class="p-section">
+      <h3>👧👦 Enfants</h3>
+      <div style="display:flex;flex-direction:column;gap:8px">
+  `;
+
+  children.forEach(child => {
+    const selected = child.id === active.id;
+
+    html += `
+      <div class="child-row" style="
+        display:flex;
+        gap:8px;
+        align-items:center;
+        justify-content:space-between;
+        background:${selected ? '#243b55' : '#2c3e50'};
+        border:${selected ? '2px solid #00b894' : '1px solid #4a5d6e'};
+        border-radius:10px;
+        padding:10px;
+        flex-wrap:wrap;
+      ">
+        <div style="font-weight:800">
+          <span style="font-size:24px">${escapeHtml(child.emoji || '🦸')}</span>
+          ${escapeHtml(child.name || 'Champion')}
+          ${selected ? ' ✅' : ''}
+        </div>
+        <div class="p-actions-center">
+          ${selected ? '' : `<button class="p-btn" data-child-act="select" data-child-id="${child.id}">Choisir</button>`}
+          <button class="p-btn" data-child-act="edit" data-child-id="${child.id}">Modifier</button>
+          <button class="p-btn danger" data-child-act="delete" data-child-id="${child.id}">Supprimer</button>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `
+      </div>
+      <div class="p-actions-center" style="margin-top:10px">
+        <button class="p-btn success" id="p-add-child">➕ Ajouter un enfant</button>
+      </div>
+    </div>
+  `;
+
+  return html;
+}
+
+/* =========================================================
+   Missions
+   ========================================================= */
+
 function renderParentTasks() {
+  const child = activeChild();
   const list = document.getElementById('p-tasks-list');
+
+  if (!child || !list) return;
+
   list.innerHTML = '';
 
-  store.state.tasks.forEach(task => {
+  child.tasks.forEach(task => {
     const row = document.createElement('div');
     row.className = 'task-row';
 
     row.innerHTML = `
-      <input class="tr-emoji" type="text" value="${escapeHtml(task.emoji)}" maxlength="2" data-id="${task.id}" data-field="emoji">
+      <input class="tr-emoji" type="text" value="${escapeHtml(task.emoji)}" maxlength="4" data-id="${task.id}" data-field="emoji">
       <input class="tr-name" type="text" value="${escapeHtml(task.name)}" maxlength="40" data-id="${task.id}" data-field="name">
       <input class="tr-dur" type="number" min="1" max="30" value="${task.duration}" data-id="${task.id}" data-field="duration">
       <div class="tr-actions">
@@ -371,7 +487,7 @@ function renderParentTasks() {
     input.addEventListener('change', event => {
       const id = parseInt(event.target.dataset.id, 10);
       const field = event.target.dataset.field;
-      const task = store.state.tasks.find(item => item.id === id);
+      const task = child.tasks.find(item => item.id === id);
 
       if (!task) return;
 
@@ -383,156 +499,68 @@ function renderParentTasks() {
       }
 
       task[field] = value;
+
+      hydrateLegacyFields(store.state);
       saveState();
     });
   });
 
   list.querySelectorAll('.icon-btn').forEach(button => {
     button.addEventListener('click', () => {
-      handleTaskAction(parseInt(button.dataset.id, 10), button.dataset.act);
+      handleTaskAction(
+        parseInt(button.dataset.id, 10),
+        button.dataset.act
+      );
     });
   });
 }
 
 function handleTaskAction(id, action) {
-  const index = store.state.tasks.findIndex(task => task.id === id);
+  const child = activeChild();
+  if (!child) return;
 
+  const index = child.tasks.findIndex(task => task.id === id);
   if (index < 0) return;
 
   if (action === 'up' && index > 0) {
-    [store.state.tasks[index - 1], store.state.tasks[index]] =
-      [store.state.tasks[index], store.state.tasks[index - 1]];
-  } else if (action === 'down' && index < store.state.tasks.length - 1) {
-    [store.state.tasks[index + 1], store.state.tasks[index]] =
-      [store.state.tasks[index], store.state.tasks[index + 1]];
+    [child.tasks[index - 1], child.tasks[index]] =
+      [child.tasks[index], child.tasks[index - 1]];
+  } else if (action === 'down' && index < child.tasks.length - 1) {
+    [child.tasks[index + 1], child.tasks[index]] =
+      [child.tasks[index], child.tasks[index + 1]];
   } else if (action === 'toggle') {
-    store.state.tasks[index].active = !store.state.tasks[index].active;
+    child.tasks[index].active = !child.tasks[index].active;
   } else if (action === 'delete') {
-    if (!confirm('Supprimer cette tâche ?')) return;
-    store.state.tasks.splice(index, 1);
+    if (!confirm('Supprimer cette mission ?')) return;
+    child.tasks.splice(index, 1);
   }
 
+  hydrateLegacyFields(store.state);
   saveState();
   renderParentTasks();
 }
 
-function bindParentEvents() {
-  document.getElementById('p-save-name').addEventListener('click', () => {
-    store.state.childName = document.getElementById('p-name').value.trim().slice(0, 20);
-    saveState();
-    flashSaved('p-save-name');
-  });
-
-  document.getElementById('p-change-pwd').addEventListener('click', () => {
-    showSetPasswordModal(() => renderParent());
-  });
-
-  const removePasswordButton = document.getElementById('p-remove-pwd');
-
-  if (removePasswordButton) {
-    removePasswordButton.addEventListener('click', () => {
-      if (!confirm('Supprimer le code ? Tu reviendras au calcul mental.')) return;
-
-      store.state.settings.parentPassword = null;
-      saveState();
-      renderParent();
-    });
-  }
-
-  document.getElementById('p-save-night').addEventListener('click', () => {
-    const nightMode = store.state.settings.nightMode;
-
-    nightMode.enabled = document.getElementById('p-nm-enabled').checked;
-    nightMode.autoSchedule = document.getElementById('p-nm-auto').checked;
-    nightMode.startTime = document.getElementById('p-nm-start').value || '20:30';
-    nightMode.endTime = document.getElementById('p-nm-end').value || '06:30';
-
-    saveState();
-    applyNightMode();
-    flashSaved('p-save-night');
-  });
-
-  const quotaSlider = document.getElementById('p-quota');
-  const dropSlider = document.getElementById('p-drop');
-
-  quotaSlider.addEventListener('input', event => {
-    document.getElementById('p-quota-val').textContent = event.target.value + '%';
-  });
-
-  dropSlider.addEventListener('input', event => {
-    document.getElementById('p-drop-val').textContent = event.target.value + '%';
-  });
-
-  document.getElementById('p-save-rewards').addEventListener('click', () => {
-    store.state.settings.perfectQuota = parseInt(quotaSlider.value, 10);
-    store.state.settings.monsterDropRate = parseInt(dropSlider.value, 10);
-
-    saveState();
-    flashSaved('p-save-rewards');
-  });
-
-  document.getElementById('p-add-task').addEventListener('click', addTaskFlow);
-  document.getElementById('p-export').addEventListener('click', exportConfig);
-  document.getElementById('p-import').addEventListener('click', importConfig);
-
-  document.getElementById('p-reset-day').addEventListener('click', () => {
-    if (confirm('Réinitialiser la progression du jour ?')) {
-      store.state.completedToday = [];
-      resetPerfectShownToday();
-      saveState();
-      renderParent();
-    }
-  });
-
-  document.getElementById('p-reset-collection').addEventListener('click', () => {
-    if (confirm('Effacer la collection ?')) {
-      store.state.monsters = [];
-      saveState();
-      renderParent();
-    }
-  });
-
-  document.getElementById('p-reset-all').addEventListener('click', () => {
-    if (!confirm('⚠️ Tout effacer ?')) return;
-    if (!confirm('Vraiment ? (dernière confirmation)')) return;
-
-    store.state = defaultState();
-    saveState();
-
-    applyTheme(store.state.settings.theme);
-    applyNightMode();
-
-    renderParent();
-  });
-}
-
-function flashSaved(id) {
-  const button = document.getElementById(id);
-  if (!button) return;
-
-  const original = button.textContent;
-  button.textContent = '✅ Enregistré';
-
-  setTimeout(() => {
-    button.textContent = original;
-  }, 1200);
-}
-
 function addTaskFlow() {
+  const child = activeChild();
+  if (!child) return;
+
   const choices = EMOJI_CHOICES
     .map(emoji => `<button class="icon-btn" data-emoji="${emoji}" style="font-size:24px;margin:2px">${emoji}</button>`)
     .join('');
 
   showModal({
-    title: '➕ Nouvelle tâche',
+    title: '➕ Nouvelle mission',
     message: `
       <label style="text-align:left;display:block">Nom</label>
       <input type="text" id="nt-name" maxlength="40" style="width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:6px;font-size:16px">
+
       <label style="text-align:left;display:block">Emoji</label>
-      <input type="text" id="nt-emoji" maxlength="2" value="⭐" style="width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:6px;font-size:16px;text-align:center">
+      <input type="text" id="nt-emoji" maxlength="4" value="⭐" style="width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:6px;font-size:16px;text-align:center">
+
       <div style="display:flex;flex-wrap:wrap;max-height:120px;overflow-y:auto;margin:6px 0;justify-content:center">
         ${choices}
       </div>
+
       <label style="text-align:left;display:block">Durée (min)</label>
       <input type="number" id="nt-dur" min="1" max="30" value="5" style="width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:6px;font-size:16px;text-align:center">
     `,
@@ -547,9 +575,9 @@ function addTaskFlow() {
 
       if (!name) return 'Donne un nom';
 
-      const id = Math.max(0, ...store.state.tasks.map(task => task.id)) + 1;
+      const id = Math.max(0, ...child.tasks.map(task => task.id)) + 1;
 
-      store.state.tasks.push({
+      child.tasks.push({
         id,
         emoji,
         name,
@@ -557,6 +585,7 @@ function addTaskFlow() {
         active: true
       });
 
+      hydrateLegacyFields(store.state);
       saveState();
       renderParentTasks();
 
@@ -573,8 +602,455 @@ function addTaskFlow() {
   }, 100);
 }
 
+/* =========================================================
+   Récompenses personnalisées
+   ========================================================= */
+
+function renderRewardsSection(child) {
+  const rewards = Array.isArray(child.rewards) ? child.rewards : [];
+
+  let html = `
+    <div class="p-section">
+      <h3>🎁 Récompenses personnalisées</h3>
+      <div style="text-align:center;font-size:13px;color:#bdc3c7;margin-bottom:8px">
+        Points disponibles : <b>${child.points} ⭐</b>
+      </div>
+      <div id="p-rewards-list">
+  `;
+
+  if (rewards.length === 0) {
+    html += `
+      <div style="text-align:center;color:#bdc3c7;font-size:13px;margin:10px 0">
+        Aucune récompense personnalisée pour le moment.
+      </div>
+    `;
+  }
+
+  rewards.forEach(reward => {
+    html += `
+      <div class="task-row" style="${reward.active ? '' : 'opacity:.55'}">
+        <input class="tr-emoji" type="text" value="${escapeHtml(reward.emoji)}" maxlength="4" data-reward-id="${reward.id}" data-reward-field="emoji">
+        <input class="tr-name" type="text" value="${escapeHtml(reward.name)}" maxlength="40" data-reward-id="${reward.id}" data-reward-field="name">
+        <input class="tr-dur" type="number" min="1" max="999" value="${reward.cost}" data-reward-id="${reward.id}" data-reward-field="cost">
+        <div class="tr-actions">
+          <button class="icon-btn" data-reward-act="claim" data-reward-id="${reward.id}">⭐</button>
+          <button class="icon-btn" data-reward-act="toggle" data-reward-id="${reward.id}">${reward.active ? '👁️' : '🚫'}</button>
+          <button class="icon-btn" data-reward-act="delete" data-reward-id="${reward.id}">🗑️</button>
+        </div>
+        <div style="width:100%;font-size:12px;color:#bdc3c7;text-align:center">
+          Coût : ${reward.cost} pts — Utilisée ${reward.claimed || 0} fois
+        </div>
+      </div>
+    `;
+  });
+
+  html += `
+      </div>
+      <div class="p-actions-center">
+        <button class="p-btn success" id="p-add-reward">➕ Ajouter une récompense</button>
+      </div>
+    </div>
+  `;
+
+  return html;
+}
+
+function bindRewardEvents() {
+  const child = activeChild();
+  if (!child) return;
+
+  document.querySelectorAll('[data-reward-field]').forEach(input => {
+    input.addEventListener('change', event => {
+      const id = parseInt(event.target.dataset.rewardId, 10);
+      const field = event.target.dataset.rewardField;
+
+      const reward = child.rewards.find(item => item.id === id);
+      if (!reward) return;
+
+      let value = event.target.value;
+
+      if (field === 'cost') {
+        value = Math.max(1, Math.min(999, parseInt(value, 10) || 1));
+        event.target.value = value;
+      }
+
+      reward[field] = value;
+
+      hydrateLegacyFields(store.state);
+      saveState();
+    });
+  });
+
+  document.querySelectorAll('[data-reward-act]').forEach(button => {
+    button.addEventListener('click', () => {
+      const id = parseInt(button.dataset.rewardId, 10);
+      handleRewardAction(id, button.dataset.rewardAct);
+    });
+  });
+}
+
+function handleRewardAction(id, action) {
+  const child = activeChild();
+  if (!child) return;
+
+  const index = child.rewards.findIndex(reward => reward.id === id);
+  if (index < 0) return;
+
+  const reward = child.rewards[index];
+
+  if (action === 'toggle') {
+    reward.active = !reward.active;
+  }
+
+  if (action === 'delete') {
+    if (!confirm('Supprimer cette récompense ?')) return;
+    child.rewards.splice(index, 1);
+  }
+
+  if (action === 'claim') {
+    if (!reward.active) {
+      alert('Cette récompense est désactivée.');
+      return;
+    }
+
+    if (child.points < reward.cost) {
+      alert(`Pas assez de points. Il manque ${reward.cost - child.points} ⭐.`);
+      return;
+    }
+
+    if (!confirm(`Utiliser ${reward.cost} ⭐ pour : ${reward.name} ?`)) return;
+
+    child.points -= reward.cost;
+    reward.claimed = (reward.claimed || 0) + 1;
+  }
+
+  hydrateLegacyFields(store.state);
+  saveState();
+  renderParent();
+}
+
+function addRewardFlow() {
+  const child = activeChild();
+  if (!child) return;
+
+  showModal({
+    title: '🎁 Nouvelle récompense',
+    message: `
+      <label style="text-align:left;display:block">Nom</label>
+      <input type="text" id="nr-name" maxlength="40" style="width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:6px;font-size:16px">
+
+      <label style="text-align:left;display:block">Emoji</label>
+      <input type="text" id="nr-emoji" maxlength="4" value="🎁" style="width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:6px;font-size:16px;text-align:center">
+
+      <label style="text-align:left;display:block">Coût en points</label>
+      <input type="number" id="nr-cost" min="1" max="999" value="30" style="width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:6px;font-size:16px;text-align:center">
+    `,
+    inputType: null,
+    onValidate() {
+      const name = document.getElementById('nr-name').value.trim();
+      const emoji = document.getElementById('nr-emoji').value.trim() || '🎁';
+      const cost = Math.max(
+        1,
+        Math.min(999, parseInt(document.getElementById('nr-cost').value, 10) || 30)
+      );
+
+      if (!name) return 'Donne un nom à la récompense';
+
+      const id = Math.max(0, ...child.rewards.map(reward => reward.id)) + 1;
+
+      child.rewards.push({
+        id,
+        emoji,
+        name,
+        cost,
+        active: true,
+        claimed: 0
+      });
+
+      hydrateLegacyFields(store.state);
+      saveState();
+      renderParent();
+
+      return true;
+    }
+  });
+}
+
+/* =========================================================
+   Enfants
+   ========================================================= */
+
+function addChildFlow() {
+  showModal({
+    title: '👧👦 Nouvel enfant',
+    message: `
+      <label style="text-align:left;display:block">Prénom</label>
+      <input type="text" id="nc-name" maxlength="20" style="width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:6px;font-size:16px">
+
+      <label style="text-align:left;display:block">Emoji</label>
+      <input type="text" id="nc-emoji" maxlength="4" value="🦸" style="width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:6px;font-size:16px;text-align:center">
+    `,
+    inputType: null,
+    onValidate() {
+      const name = document.getElementById('nc-name').value.trim();
+      const emoji = document.getElementById('nc-emoji').value.trim() || '🦸';
+
+      if (!name) return 'Donne un prénom';
+
+      addChild({ name, emoji });
+      renderParent();
+
+      return true;
+    }
+  });
+}
+
+function editChildFlow(childId) {
+  const child = store.state.children.find(item => item.id === childId);
+  if (!child) return;
+
+  showModal({
+    title: '✏️ Modifier enfant',
+    message: `
+      <label style="text-align:left;display:block">Prénom</label>
+      <input type="text" id="ec-name" maxlength="20" value="${escapeHtml(child.name)}" style="width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:6px;font-size:16px">
+
+      <label style="text-align:left;display:block">Emoji</label>
+      <input type="text" id="ec-emoji" maxlength="4" value="${escapeHtml(child.emoji || '🦸')}" style="width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:6px;font-size:16px;text-align:center">
+    `,
+    inputType: null,
+    onValidate() {
+      const name = document.getElementById('ec-name').value.trim();
+      const emoji = document.getElementById('ec-emoji').value.trim() || '🦸';
+
+      if (!name) return 'Donne un prénom';
+
+      updateChild(childId, { name, emoji });
+      renderParent();
+
+      return true;
+    }
+  });
+}
+
+function bindChildrenEvents() {
+  const addButton = document.getElementById('p-add-child');
+
+  if (addButton) {
+    addButton.addEventListener('click', addChildFlow);
+  }
+
+  document.querySelectorAll('[data-child-act]').forEach(button => {
+    button.addEventListener('click', () => {
+      const action = button.dataset.childAct;
+      const childId = button.dataset.childId;
+
+      if (action === 'select') {
+        setActiveChild(childId);
+        renderParent();
+      }
+
+      if (action === 'edit') {
+        editChildFlow(childId);
+      }
+
+      if (action === 'delete') {
+        if (store.state.children.length <= 1) {
+          alert('Il faut garder au moins un enfant.');
+          return;
+        }
+
+        const child = store.state.children.find(item => item.id === childId);
+
+        if (!confirm(`Supprimer ${child?.name || 'cet enfant'} ? Cette action est irréversible.`)) {
+          return;
+        }
+
+        deleteChild(childId);
+        renderParent();
+      }
+    });
+  });
+}
+
+/* =========================================================
+   Bind global parent
+   ========================================================= */
+
+function bindParentEvents() {
+  bindChildrenEvents();
+  bindRewardEvents();
+
+  document.getElementById('p-save-child').addEventListener('click', () => {
+    const child = activeChild();
+    if (!child) return;
+
+    child.name = document.getElementById('p-name').value.trim().slice(0, 20) || child.name;
+    child.emoji = document.getElementById('p-emoji').value.trim().slice(0, 4) || child.emoji;
+
+    hydrateLegacyFields(store.state);
+    saveState();
+
+    flashSaved('p-save-child');
+  });
+
+  document.getElementById('p-add-task').addEventListener('click', addTaskFlow);
+
+  document.getElementById('p-reset-missions').addEventListener('click', () => {
+    const child = activeChild();
+    if (!child) return;
+
+    if (confirm(`Réinitialiser uniquement les missions du jour de ${child.name || 'cet enfant'} ?`)) {
+      child.completedToday = [];
+      resetPerfectShownToday();
+
+      hydrateLegacyFields(store.state);
+      saveState();
+      renderParent();
+    }
+  });
+
+  const addRewardButton = document.getElementById('p-add-reward');
+
+  if (addRewardButton) {
+    addRewardButton.addEventListener('click', addRewardFlow);
+  }
+
+  const quotaSlider = document.getElementById('p-quota');
+  const dropSlider = document.getElementById('p-drop');
+
+  quotaSlider.addEventListener('input', event => {
+    document.getElementById('p-quota-val').textContent = event.target.value + '%';
+  });
+
+  dropSlider.addEventListener('input', event => {
+    document.getElementById('p-drop-val').textContent = event.target.value + '%';
+  });
+
+  document.getElementById('p-save-rewards-settings').addEventListener('click', () => {
+    const child = activeChild();
+    if (!child) return;
+
+    child.settings.perfectQuota = parseInt(quotaSlider.value, 10);
+    child.settings.monsterDropRate = parseInt(dropSlider.value, 10);
+
+    hydrateLegacyFields(store.state);
+    saveState();
+
+    flashSaved('p-save-rewards-settings');
+  });
+
+  document.getElementById('p-reset-collection').addEventListener('click', () => {
+    const child = activeChild();
+    if (!child) return;
+
+    if (confirm(`Effacer la collection de ${child.name || 'cet enfant'} ?`)) {
+      child.monsters = [];
+
+      hydrateLegacyFields(store.state);
+      saveState();
+      renderParent();
+    }
+  });
+
+  document.getElementById('p-save-night').addEventListener('click', () => {
+    const nightMode = store.state.settings.nightMode;
+
+    nightMode.enabled = document.getElementById('p-nm-enabled').checked;
+    nightMode.autoSchedule = document.getElementById('p-nm-auto').checked;
+    nightMode.startTime = document.getElementById('p-nm-start').value || '20:30';
+    nightMode.endTime = document.getElementById('p-nm-end').value || '06:30';
+
+    store.state.sharedSettings.nightMode = nightMode;
+
+    saveState();
+    applyNightMode();
+
+    flashSaved('p-save-night');
+  });
+
+  document.getElementById('p-change-pwd').addEventListener('click', () => {
+    showSetPasswordModal(() => renderParent());
+  });
+
+  const removePasswordButton = document.getElementById('p-remove-pwd');
+
+  if (removePasswordButton) {
+    removePasswordButton.addEventListener('click', () => {
+      if (!confirm('Supprimer le code ? Tu reviendras au calcul mental.')) return;
+
+      store.state.settings.parentPassword = null;
+      store.state.sharedSettings.parentPassword = null;
+
+      saveState();
+      renderParent();
+    });
+  }
+
+  document.getElementById('p-export').addEventListener('click', exportConfig);
+  document.getElementById('p-import').addEventListener('click', importConfig);
+
+  document.getElementById('p-reset-child').addEventListener('click', () => {
+    const child = activeChild();
+    if (!child) return;
+
+    if (!confirm(`Réinitialiser entièrement ${child.name || 'cet enfant'} ?`)) return;
+    if (!confirm('Cela effacera missions validées, points, monstres, stats et récompenses personnalisées. Confirmer ?')) return;
+
+    const childId = child.id;
+    const childName = child.name;
+    const childEmoji = child.emoji;
+
+    const fresh = defaultState().children[0];
+
+    fresh.id = childId;
+    fresh.name = childName;
+    fresh.emoji = childEmoji;
+
+    const index = store.state.children.findIndex(item => item.id === childId);
+    store.state.children[index] = fresh;
+
+    hydrateLegacyFields(store.state);
+    saveState();
+    renderParent();
+  });
+
+  document.getElementById('p-reset-all').addEventListener('click', () => {
+    if (!confirm('⚠️ Tout effacer ?')) return;
+    if (!confirm('Vraiment ? Cette action est irréversible.')) return;
+
+    store.state = defaultState();
+
+    saveState();
+
+    applyTheme(store.state.settings.theme);
+    applyNightMode();
+
+    renderParent();
+  });
+}
+
+function flashSaved(id) {
+  const button = document.getElementById(id);
+  if (!button) return;
+
+  const original = button.textContent;
+
+  button.textContent = '✅ Enregistré';
+
+  setTimeout(() => {
+    button.textContent = original;
+  }, 1200);
+}
+
+/* =========================================================
+   Export / Import
+   ========================================================= */
+
 function exportConfig() {
   try {
+    hydrateLegacyFields(store.state);
+
     const data = JSON.stringify(store.state, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -604,6 +1080,7 @@ function importConfig() {
 
   input.addEventListener('change', event => {
     const file = event.target.files[0];
+
     if (!file) return;
 
     const reader = new FileReader();
@@ -617,6 +1094,8 @@ function importConfig() {
         }
 
         store.state = migrate(data);
+
+        hydrateLegacyFields(store.state);
         saveState();
 
         applyTheme(store.state.settings.theme);
@@ -634,6 +1113,10 @@ function importConfig() {
 
   input.click();
 }
+
+/* =========================================================
+   Boutons flottants
+   ========================================================= */
 
 export function setupLockButton() {
   const button = document.getElementById('lock-btn');

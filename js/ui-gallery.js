@@ -1,16 +1,21 @@
-import { store } from './state.js';
+import { activeChild } from './state.js';
 import { BESTIARY, RARITY_LABEL } from './data.js';
-import { escapeHtml } from './helpers.js';
+import { escapeHtml, vibrate } from './helpers.js';
+import { soundClick } from './audio.js';
+import { showMonsterReveal } from './rewards.js';
 
 export function renderGallery() {
+  const child = activeChild();
+  if (!child) return;
+
   document.getElementById('gallery-counter').textContent =
-    `${store.state.monsters.length} / ${BESTIARY.length} monstres`;
+    `${child.monsters.length} / ${BESTIARY.length} monstres`;
 
   const grid = document.getElementById('gallery-grid');
   grid.innerHTML = '';
 
   BESTIARY.forEach(monster => {
-    const owned = store.state.monsters.includes(monster.id);
+    const owned = child.monsters.includes(monster.id);
 
     const card = document.createElement('div');
     card.className = 'monster-card' + (owned ? '' : ' locked');
@@ -22,6 +27,17 @@ export function renderGallery() {
         ${RARITY_LABEL[monster.rarity]}
       </span>
     `;
+
+    if (owned) {
+      card.style.cursor = 'pointer';
+      card.setAttribute('aria-label', `Voir ${monster.name}`);
+
+      card.addEventListener('click', () => {
+        soundClick();
+        vibrate(20);
+        showMonsterReveal(monster, { replay: true });
+      });
+    }
 
     grid.appendChild(card);
   });

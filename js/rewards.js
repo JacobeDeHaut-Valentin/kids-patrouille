@@ -1,4 +1,10 @@
-import { store, saveState } from './state.js';
+import {
+  store,
+  saveState,
+  activeChild,
+  hydrateLegacyFields
+} from './state.js';
+
 import { BESTIARY, RARITY_LABEL } from './data.js';
 import { activeTasks, escapeHtml, showScreen, vibrate } from './helpers.js';
 import { soundClick, soundUnlock, soundVictory } from './audio.js';
@@ -11,7 +17,10 @@ export function resetPerfectShownToday() {
 }
 
 export function drawReward() {
-  const rate = store.state.settings.monsterDropRate / 100;
+  const child = activeChild();
+  if (!child) return null;
+
+  const rate = child.settings.monsterDropRate / 100;
 
   if (Math.random() >= rate) return null;
 
@@ -33,19 +42,24 @@ export function drawReward() {
   }
 
   if (!candidate) {
-    store.state.points += 20;
+    child.points += 20;
+    hydrateLegacyFields(store.state);
     return null;
   }
 
-  store.state.monsters.push(candidate.id);
+  child.monsters.push(candidate.id);
+  hydrateLegacyFields(store.state);
 
   return candidate;
 }
 
 export function pickUncollected(rarity) {
+  const child = activeChild();
+  if (!child) return null;
+
   const pool = BESTIARY.filter(monster =>
     monster.rarity === rarity &&
-    !store.state.monsters.includes(monster.id)
+    !child.monsters.includes(monster.id)
   );
 
   if (pool.length === 0) return null;
@@ -85,7 +99,16 @@ export function showConfetti() {
   setTimeout(() => container.remove(), 4000);
 }
 
-export function showMonsterReveal(monster) {
+/**
+ * Affiche l'animation de révélation d'un monstre.
+ *
+ * @param {Object} monster
+ * @param {Object} options
+ * @param {boolean} options.replay - true si le monstre est déjà débloqué.
+ */
+export function showMonsterReveal(monster, options = {}) {
+  const replay = !!options.replay;
+
   soundUnlock();
   vibrate([50, 30, 50, 30, 150]);
 
@@ -93,7 +116,9 @@ export function showMonsterReveal(monster) {
   background.className = 'card-reveal-bg';
 
   background.innerHTML = `
-    <div class="title">Nouveau Monstre Débloqué !</div>
+    <div class="title">
+      ${replay ? 'Monstre déjà débloqué !' : 'Nouveau Monstre Débloqué !'}
+    </div>
     <div class="card-flip">
       <div class="card-inner">
         <div class="card-face card-back">❓</div>
@@ -106,7 +131,7 @@ export function showMonsterReveal(monster) {
         </div>
       </div>
     </div>
-    <button class="closebtn">Super ! ✨</button>
+    <button class="closebtn">${replay ? 'Encore ! ✨' : 'Super ! ✨'}</button>
   `;
 
   document.body.appendChild(background);
@@ -115,37 +140,44 @@ export function showMonsterReveal(monster) {
     soundClick();
     vibrate(20);
     background.remove();
-    checkPerfectDay();
-    showScreen('screen-home');
-    renderHome();
+
+    if (!replay) {
+      checkPerfectDay();
+      showScreen('screen-home');
+      renderHome();
+    }
   });
 }
 
 export function checkPerfectDay() {
+  const child = activeChild();
+  if (!child) return;
+
   const active = activeTasks();
 
   if (active.length === 0) return;
 
   const done = active.filter(task =>
-    store.state.completedToday.includes(task.id)
+    child.completedToday.includes(task.id)
   ).length;
 
   const percent = (done / active.length) * 100;
 
-  if (percent >= store.state.settings.perfectQuota && !perfectShownToday) {
+  if (percent >= child.settings.perfectQuota && !perfectShownToday) {
     perfectShownToday = true;
 
     const today = new Date().toDateString();
 
-    if (!store.state.stats.history.some(item => item.date === today && item.perfect)) {
-      store.state.stats.perfectDays++;
-      store.state.stats.history.push({
+    if (!child.stats.history.some(item => item.date === today && item.perfect)) {
+      child.stats.perfectDays++;
+      child.stats.history.push({
         date: today,
         perfect: true,
         count: done
       });
     }
 
+    hydrateLegacyFields(store.state);
     saveState();
 
     setTimeout(showUltimateReward, 300);
@@ -153,7 +185,8 @@ export function checkPerfectDay() {
 }
 
 export function showUltimateReward() {
-  const name = store.state.childName || 'Champion';
+  const child = activeChild();
+  const name = child?.name || 'Champion';
 
   const overlay = document.createElement('div');
   overlay.className = 'victory-overlay';

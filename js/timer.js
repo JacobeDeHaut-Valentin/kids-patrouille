@@ -1,17 +1,26 @@
-import { store, saveState } from './state.js';
+import {
+  store,
+  saveState,
+  activeChild,
+  hydrateLegacyFields
+} from './state.js';
+
 import { showScreen, vibrate } from './helpers.js';
+
 import {
   soundClick,
   soundValid,
   soundFail,
   soundAlarm
 } from './audio.js';
+
 import {
   drawReward,
   showConfetti,
   showMonsterReveal,
   checkPerfectDay
 } from './rewards.js';
+
 import { renderHome } from './ui-home.js';
 
 let currentTaskId = null;
@@ -51,9 +60,12 @@ export function releaseWakeLock() {
 }
 
 export function openTimer(taskId) {
+  const child = activeChild();
+  if (!child) return;
+
   currentTaskId = taskId;
 
-  const task = store.state.tasks.find(item => item.id === taskId);
+  const task = child.tasks.find(item => item.id === taskId);
   if (!task) return;
 
   document.getElementById('timer-emoji').textContent = task.emoji;
@@ -165,14 +177,19 @@ export function exitTimer() {
 export function succeedTask() {
   stopTimer();
 
+  const child = activeChild();
+  if (!child) return;
+
   const taskId = currentTaskId;
   if (taskId == null) return;
 
-  if (!store.state.completedToday.includes(taskId)) {
-    store.state.completedToday.push(taskId);
-    store.state.stats.totalCompleted++;
-    store.state.points += 10;
+  if (!child.completedToday.includes(taskId)) {
+    child.completedToday.push(taskId);
+    child.stats.totalCompleted++;
+    child.points += 10;
   }
+
+  hydrateLegacyFields(store.state);
 
   vibrate([100, 50, 100, 50, 200]);
   soundValid();
@@ -180,6 +197,7 @@ export function succeedTask() {
 
   const reward = drawReward();
 
+  hydrateLegacyFields(store.state);
   saveState();
 
   setTimeout(() => {
@@ -196,13 +214,17 @@ export function succeedTask() {
 export function failTask() {
   stopTimer();
 
-  store.state.stats.failedAttempts = (store.state.stats.failedAttempts || 0) + 1;
-  store.state.points += 1;
+  const child = activeChild();
+  if (!child) return;
+
+  child.stats.failedAttempts = (child.stats.failedAttempts || 0) + 1;
+  child.points += 1;
+
+  hydrateLegacyFields(store.state);
+  saveState();
 
   vibrate([50, 30, 50]);
   soundFail();
-
-  saveState();
 
   setTimeout(() => {
     showScreen('screen-home');
