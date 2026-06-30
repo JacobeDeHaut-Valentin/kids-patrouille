@@ -913,3 +913,139 @@
     grid-template-columns: repeat(4, 1fr);
   }
 }
+
+/* =========================================================
+   V4.1 - Multi-enfants
+   ========================================================= */
+
+.child-row{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  justify-content:space-between;
+  background:#2c3e50;
+  border:1px solid #4a5d6e;
+  border-radius:12px;
+  padding:10px;
+  flex-wrap:wrap;
+  transition:.15s;
+}
+
+.child-row.is-active{
+  background:#243b55;
+  border:2px solid #00b894;
+}
+
+.child-identity{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-weight:800;
+}
+
+.child-emoji{
+  font-size:26px;
+}
+
+.child-badge{
+  background:#00b894;
+  color:#fff;
+  font-size:12px;
+  font-weight:700;
+  padding:3px 8px;
+  border-radius:999px;
+}
+
+.child-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+
+/* =========================================================
+   Récompenses personnalisées
+   ========================================================= */
+
+.reward-row{
+  display:flex;
+  gap:6px;
+  align-items:center;
+  padding:10px;
+  background:#2c3e50;
+  border-radius:10px;
+  margin-bottom:8px;
+  flex-wrap:wrap;
+  border:1px solid #4a5d6e;
+}
+
+.reward-row.disabled{
+  opacity:.55;
+}
+
+.reward-meta{
+  width:100%;
+  text-align:center;
+  font-size:12px;
+  color:#bdc3c7;
+}
+
+.reward-cost{
+  color:#fdcb6e;
+  font-weight:800;
+}
+
+.reward-claimed{
+  color:#74b9ff;
+  font-weight:700;
+}
+
+.reward-points-box{
+  text-align:center;
+  margin-bottom:10px;
+  color:#bdc3c7;
+}
+
+.reward-points-box b{
+  color:#fdcb6e;
+  font-size:18px;
+}
+
+/* =========================================================
+   Galerie interactive
+   ========================================================= */
+
+.monster-card:not(.locked){
+  cursor:pointer;
+  transition:transform .15s, box-shadow .15s;
+}
+
+.monster-card:not(.locked):hover{
+  box-shadow:var(--shadow-lg);
+}
+
+.monster-card:not(.locked):active{
+  transform:scale(.96);
+}
+
+/* =========================================================
+   Responsive V4.1
+   ========================================================= */
+
+@media (max-width:420px){
+
+  .child-row{
+    text-align:center;
+    justify-content:center;
+  }
+
+  .child-identity{
+    width:100%;
+    justify-content:center;
+  }
+
+  .child-actions{
+    width:100%;
+    justify-content:center;
+  }
+
+}
