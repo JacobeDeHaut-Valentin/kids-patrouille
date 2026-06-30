@@ -1,0 +1,110 @@
+/* =========================================================
+   Kids Patrouille - Monstres & Missions
+   themes.css — Thèmes + mode nuit
+   ========================================================= */
+
+/* ===== Thème Aventurier 🍄 ===== */
+body.theme-adventurer {
+  --primary: #e74c3c;
+  --primary-dark: #c0392b;
+  --accent: #f1c40f;
+  --bg: #fff5f5;
+
+  --grad-home: linear-gradient(135deg, #ffcccc 0%, #ff7675 100%);
+  --grad-timer: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  --grad-gallery: linear-gradient(135deg, #f1c40f 0%, #e67e22 100%);
+}
+
+/* ===== Thème Petit Éclair ⚡ ===== */
+body.theme-spark {
+  --primary: #f1c40f;
+  --primary-dark: #d4a017;
+  --accent: #e67e22;
+  --bg: #fffbe6;
+
+  --grad-home: linear-gradient(135deg, #fff3a0 0%, #ffb347 100%);
+  --grad-timer: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+  --grad-gallery: linear-gradient(135deg, #f1c40f 0%, #e74c3c 100%);
+}
+
+/* ===== Thème Nature 🌿 ===== */
+body.theme-nature {
+  --primary: #27ae60;
+  --primary-dark: #1e8449;
+  --accent: #8b6f47;
+  --bg: #f0fff4;
+
+  --grad-home: linear-gradient(135deg, #c8f7c5 0%, #7ed957 100%);
+  --grad-timer: linear-gradient(135deg, #27ae60 0%, #1e8449 100%);
+  --grad-gallery: linear-gradient(135deg, #8b6f47 0%, #27ae60 100%);
+}
+
+/* ===== Thème Robot 🤖 ===== */
+body.theme-robot {
+  --primary: #00d4ff;
+  --primary-dark: #0099cc;
+  --accent: #a3a3a3;
+  --bg: #e8f4f8;
+
+  --grad-home: linear-gradient(135deg, #b3e0ff 0%, #00d4ff 100%);
+  --grad-timer: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+  --grad-gallery: linear-gradient(135deg, #00d4ff 0%, #34495e 100%);
+}
+
+/* ===== Mode Nuit 🌙 ===== */
+body.night-mode {
+  --primary: #a29bfe;
+  --primary-dark: #6c5ce7;
+  --accent: #fdcb6e;
+
+  --bg: #1a1a2e;
+  --surface: #16213e;
+  --text: #eaeaea;
+  --muted: #7a8ba0;
+
+  --shadow: 0 4px 12px rgba(0, 0, 0, .5);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, .7);
+
+  --grad-home: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  --grad-timer: linear-gradient(135deg, #3d348b 0%, #1a1a2e 100%);
+  --grad-gallery: linear-gradient(135deg, #7c5e2c 0%, #7a3a55 100%);
+  --grad-custom: linear-gradient(135deg, #1a1a2e 0%, #2c3e50 100%);
+}
+
+/* ===== Ajustements spécifiques mode nuit ===== */
+body.night-mode .greeting {
+  color: var(--accent);
+}
+
+body.night-mode .task-btn.done {
+  background: #1e3a2a;
+}
+
+body.night-mode #screen-custom {
+  color: #eaeaea;
+}
+
+body.night-mode .custom-section {
+  background: rgba(22, 33, 62, .88);
+  color: #eaeaea;
+}
+
+body.night-mode .lock-btn {
+  background: rgba(255, 255, 255, .12);
+}
+
+body.night-mode .modal {
+  background: #16213e;
+  color: #eaeaea;
+}
+
+body.night-mode .modal input {
+  background: #1a1a2e;
+  color: #fff;
+  border-color: #3d3d5c;
+}
+
+body.night-mode .modal-cancel {
+  background: #3d3d5c;
+  color: #eaeaea;
+}

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#6c5ce7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kids Patrouille">
+<title>Kids Patrouille - Monstres & Missions</title>
+<link rel="manifest" href="manifest.json?v=4">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=4">
+<link rel="apple-touch-icon" href="favicon.svg?v=4">
+<link rel="stylesheet" href="css/core.css?v=4">
+<link rel="stylesheet" href="css/themes.css?v=4">
+<link rel="stylesheet" href="css/components.css?v=4">
+<link rel="stylesheet" href="css/animations.css?v=4">
+</head>
+<body>
+
+<section id="screen-home" class="screen active">
+  <div class="header">
+    <div style="width:56px"></div>
+    <h1 class="greeting" id="greeting">🚀 Missions du jour !</h1>
+    <div class="header-actions">
+      <button id="btn-night" class="btn-circle" aria-label="Mode nuit">🌙</button>
+      <button id="btn-gallery" class="btn-circle" aria-label="Galerie">🏆</button>
+    </div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-pill" id="stat-tasks">⏳ — restantes</div>
+    <div class="stat-pill" id="stat-monsters">👾 0 / 35</div>
+    <div class="stat-pill" id="stat-points">⭐ 0 pts</div>
+  </div>
+  <div class="tasks-grid" id="tasks-grid"></div>
+</section>
+
+<section id="screen-timer" class="screen">
+  <div class="timer-header"><button class="timer-back" id="timer-back" aria-label="Retour">← Retour</button></div>
+  <div class="timer-emoji" id="timer-emoji">🦷</div>
+  <div class="timer-title" id="timer-title">Tâche</div>
+  <div class="timer-circle-wrap">
+    <svg viewBox="0 0 200 200">
+      <circle class="timer-circle-bg" cx="100" cy="100" r="90"/>
+      <circle class="timer-circle-fg" id="timer-fg" cx="100" cy="100" r="90"/>
+    </svg>
+    <div class="timer-display" id="timer-display">2:00</div>
+  </div>
+  <div class="timer-controls">
+    <button class="timer-adjust" id="timer-minus" aria-label="-1 min">−1</button>
+    <button class="timer-adjust" id="timer-plus" aria-label="+1 min">+1</button>
+  </div>
+  <div class="timer-actions">
+    <button class="btn-big" id="timer-go">GO ! 🚀</button>
+    <div class="timer-pair" id="timer-pair">
+      <button class="btn-fail" id="timer-fail">❌ Pas réussi</button>
+      <button class="btn-success" id="timer-success">✅ Réussi !</button>
+    </div>
+  </div>
+</section>
+
+<section id="screen-gallery" class="screen">
+  <div class="header">
+    <button class="timer-back" id="gallery-back" aria-label="Retour">← Retour</button>
+    <div style="flex:1"></div><div style="width:80px"></div>
+  </div>
+  <h2 class="gallery-title">Ma Collection 🏆</h2>
+  <p class="gallery-counter" id="gallery-counter">0 / 35 monstres</p>
+  <div class="gallery-grid" id="gallery-grid"></div>
+</section>
+
+<section id="screen-custom" class="screen">
+  <div class="header">
+    <button class="timer-back" id="custom-back" style="background:rgba(0,0,0,.15);color:#2d3436" aria-label="Retour">← Retour</button>
+    <div style="flex:1"></div><div style="width:80px"></div>
+  </div>
+  <h2 class="custom-title">🎨 Personnalisation</h2>
+  <div id="custom-content"></div>
+</section>
+
+<section id="screen-parent" class="screen">
+  <div class="header">
+    <button class="timer-back" id="parent-back" style="background:rgba(255,255,255,.12)" aria-label="Retour">← Retour</button>
+    <h2>🔧 Zone Parent</h2>
+    <div style="width:80px"></div>
+  </div>
+  <div id="parent-content"></div>
+</section>
+
+<button class="custom-btn" id="custom-btn" aria-label="Personnalisation">🎨</button>
+<button class="lock-btn" id="lock-btn" aria-label="Zone parent (appui long)">🔒</button>
+
+<script type="module" src="js/app.js?v=4"></script>
+</body>
+</html>
