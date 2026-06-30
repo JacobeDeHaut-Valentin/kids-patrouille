@@ -1,4 +1,4 @@
-export const APP_VERSION = 4;
+export const APP_VERSION = 4.1;
 
 export const STORAGE_KEY = 'KidsPatrouille';
 
