@@ -1,6 +1,21 @@
 # Changelog
 
-## v4.0.0 — Architecture modulaire
+# Changelog
+
+## v4.1.0 - Multi-enfants local & récompenses personnalisées
+
+- 👧👦 Ajout du modèle multi-enfants en local
+- 🔄 Migration automatique des anciennes données vers un premier enfant
+- 🎯 Chaque enfant possède ses propres missions, points, monstres, statistiques et réglages de récompense
+- 🎁 Ajout des récompenses personnalisées avec coût en points
+- ⭐ Possibilité d’utiliser une récompense et de déduire les points
+- ♻️ Ajout d’un bouton “Reset missions du jour” sans toucher aux points, monstres ou statistiques
+- 👾 Les monstres déjà débloqués sont maintenant cliquables dans la galerie
+- ✨ Relecture de l’animation de révélation pour les monstres déjà débloqués
+- 🔧 Refonte de la zone parent avec sections plus lisibles
+- 🧱 Préparation technique pour une future V5 avec Supabase et code foyer
+
+## v4.0.0 - Architecture modulaire
 - 🏗️ Refonte en architecture modulaire : 4 fichiers CSS + 13 modules JS ES6
 - 📦 Manifest, Service Worker et favicon externalisés
 - 📛 Renommage : "Monstres & Missions" → "Kids Patrouille — Monstres & Missions"
