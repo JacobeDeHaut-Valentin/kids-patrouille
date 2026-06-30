@@ -21,7 +21,6 @@ import { resetPerfectShownToday } from './rewards.js';
 import { openCustomScreen } from './ui-custom.js';
 
 let parentChallenge = null;
-let lockPressTimer = null;
 
 /* =========================================================
    Sécurité zone parent
@@ -1121,28 +1120,13 @@ function importConfig() {
 export function setupLockButton() {
   const button = document.getElementById('lock-btn');
 
-  const start = event => {
-    event.preventDefault();
+  if (!button) return;
 
-    lockPressTimer = setTimeout(() => {
-      vibrate(80);
-      requestParentAccess();
-    }, 2000);
-  };
-
-  const cancel = () => {
-    if (lockPressTimer) {
-      clearTimeout(lockPressTimer);
-      lockPressTimer = null;
-    }
-  };
-
-  button.addEventListener('touchstart', start, { passive: false });
-  button.addEventListener('touchend', cancel);
-  button.addEventListener('touchcancel', cancel);
-  button.addEventListener('mousedown', start);
-  button.addEventListener('mouseup', cancel);
-  button.addEventListener('mouseleave', cancel);
+  button.addEventListener('click', () => {
+    soundClick();
+    vibrate(40);
+    requestParentAccess();
+  });
 }
 
 export function setupCustomButton() {
